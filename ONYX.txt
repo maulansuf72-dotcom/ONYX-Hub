@@ -1,0 +1,438 @@
+-- ONYX v0.1 for 99 Nights in the Forest
+-- Key: AyamGoreng! | Key Link: https://link-hub.net/1392772/AfVHcFNYkLMx
+
+-- Load WindUI
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CollectionService = game:GetService("CollectionService")
+
+local LocalPlayer = Players.LocalPlayer
+local function getChar() return LocalPlayer and LocalPlayer.Character end
+
+-- Window (template)
+local Window = WindUI:CreateWindow({
+    Title = "ONYX",
+    Author = "by RYXu",
+    NewElements = true,
+})
+
+--Window:SetTitle(Window.Title .. " | " .. WindUI.Version)
+
+Window:EditOpenButton({
+    Title = "Open ONYX hub UI",
+    CornerRadius = UDim.new(1,0),
+    StrokeThickness = 0,
+    Enabled = true,
+    Draggable = true,
+    -- Icon = "monitor",
+    -- Color = ColorSequence.new(Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
+    -- OnlyMobile = false,
+})
+
+-- Global state
+local Key = {
+    required = "AyamGoreng!",
+    valid = false,
+}
+local KA = {
+    enabled = false,
+    showRadius = true,
+    radius = 500,
+    target = "All",
+}
+
+-- ESP/Teleport/Auto/Movement/World states
+local ESP = {
+    mobs = false,
+    items = false,
+    players = false,
+}
+
+local TP = {
+    playerTarget = nil,
+}
+
+local AUTO = {
+    interact = false, -- auto interact/loot nearby ProximityPrompts
+    interactRadius = 25,
+}
+
+local MOVE = {
+    walkspeed = 16,
+    jumppower = 50,
+    noclip = false,
+}
+
+local WORLD = {
+    nightVision = false,
+    noFog = false,
+}
+
+-- Helpers
+local function strContains(hay, needle)
+    if typeof(hay) ~= "string" or typeof(needle) ~= "string" then return false end
+    return string.find(string.lower(hay), string.lower(needle), 1, true) ~= nil
+end
+
+-- Mob detection (generic; can be refined with your game’s tags/folders)
+local function isMobModel(model)
+    if not model or not model:IsA("Model") then return false end
+    if Players:GetPlayerFromCharacter(model) then return false end
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    local hrp = model:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp or hum.Health <= 0 then return false end
+
+    -- Prefer tags if the game uses them
+    local tagged = false
+    pcall(function()
+        if CollectionService:HasTag(model, "Enemy") or CollectionService:HasTag(model, "Mob") then
+            tagged = true
+        end
+    end)
+    if tagged then return true end
+
+    -- Fallback by name
+    local n = model.Name or ""
+    for _, key in ipairs({
+        "bunny","frog","scorpion","wolf","alpha","bear","polar","arctic","fox",
+        "mammoth","cultist","crossbow","juggernaut","alien","boar","deer","tiger","spider","creature","beast"
+    }) do
+        if strContains(n, key) then return true end
+    end
+    return false
+end
+
+local function targetMatches(model, selected)
+    if selected == "All" then
+        return true -- kill everything considered a mob (even if not in the list)
+    end
+    return strContains(model.Name or "", selected)
+end
+
+local function getTargetsInRadius(originPos, radius, selected)
+    local results = {}
+    for _, inst in ipairs(workspace:GetDescendants()) do
+        if inst:IsA("Model") and isMobModel(inst) and targetMatches(inst, selected) then
+            local hrp = inst:FindFirstChild("HumanoidRootPart")
+            if hrp and (hrp.Position - originPos).Magnitude <= radius then
+                table.insert(results, inst)
+            end
+        end
+    end
+    return results
+end
+
+-- Default kill method (can be replaced with RemoteEvent if needed)
+local function killMob(model)
+    local hum = model and model:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Health > 0 then
+        pcall(function()
+            hum.Health = 0
+        end)
+    end
+end
+
+-- Radius visualization
+local sphereAdornment
+local function ensureSphere()
+    if not KA.showRadius then
+        if sphereAdornment then sphereAdornment.Visible = false end
+        return
+    end
+    if not sphereAdornment then
+        local s = Instance.new("SphereHandleAdornment")
+        s.Name = "ONYX_KillAuraRadius"
+        s.Color3 = Color3.fromRGB(255, 100, 100)
+        s.Transparency = 0.8
+        s.AlwaysOnTop = true
+        s.ZIndex = 5
+        s.Parent = workspace
+        sphereAdornment = s
+    end
+    local char = getChar()
+    sphereAdornment.Adornee = char and char:FindFirstChild("HumanoidRootPart") or nil
+    sphereAdornment.Radius = math.clamp(KA.radius, 0, 10000)
+    sphereAdornment.Visible = KA.showRadius and (sphereAdornment.Adornee ~= nil)
+end
+
+-- Section (template)
+local ElementsSection = Window:Section({
+    Title = "Elements",
+})
+
+-- Tab: Key (gate)
+do
+    local KeyTab = ElementsSection:Tab({
+        Title = "Key",
+        Icon = "key"
+    })
+
+    KeyTab:Input({
+        Title = "Enter Key",
+        Desc = "Enter the key to unlock ONYX features",
+        Callback = function(text)
+            if text == Key.required then
+                Key.valid = true
+                WindUI:Notify({
+                    Title = "ONYX",
+                    Desc = "Key valid! Features unlocked.",
+                    Time = 5
+                })
+            else
+                Key.valid = false
+                WindUI:Notify({
+                    Title = "ONYX",
+                    Desc = "Invalid key. Try again.",
+                    Time = 4
+                })
+            end
+        end
+    })
+
+    KeyTab:Button({
+        Title = "Get Key",
+        Desc = "Open key link (copied to clipboard)",
+        Icon = "link",
+        Callback = function()
+            setclipboard("https://link-hub.net/1392772/AfVHcFNYkLMx")
+            WindUI:Notify({
+                Title = "ONYX",
+                Desc = "Key link copied to clipboard.",
+                Time = 4
+            })
+        end
+    })
+end
+
+-- Tab: Kill Aura
+do
+    local KillAuraTab = ElementsSection:Tab({
+        Title = "Kill Aura",
+        Icon = "swords",
+    })
+
+    local function requireKeyGuard()
+        if not Key.valid then
+            WindUI:Notify({
+                Title = "ONYX",
+                Desc = "Please enter a valid key in the Key tab.",
+                Time = 4
+            })
+            return false
+        end
+        return true
+    end
+
+    -- Toggle ON/OFF
+    KillAuraTab:Toggle({
+        Title = "Enable Kill Aura",
+        Desc = "Auto-kill mobs within radius",
+        Callback = function(v)
+            if not requireKeyGuard() then return end
+            KA.enabled = v and true or false
+        end
+    })
+
+    KillAuraTab:Space()
+
+    -- Target selector
+    local TARGET_LIST = {
+        "All",
+        "Bunny",
+        "Frog",
+        "Scorpion",
+        "Wolf",
+        "Alpha Wolf",
+        "Bear",
+        "Polar Bear",
+        "Arctic Fox",
+        "Mammoth",
+        "Cultist",
+        "Crossbow Cultist",
+        "Juggernaut Cultist",
+        "Alien",
+    }
+
+    if type(KillAuraTab.Dropdown) == "function" then
+        KillAuraTab:Dropdown({
+            Title = "Target",
+            Desc = "Choose mob target",
+            List = TARGET_LIST,
+            Selected = "All",
+            Callback = function(opt)
+                if not requireKeyGuard() then return end
+                KA.target = opt or "All"
+            end
+        })
+    else
+        KillAuraTab:Input({
+            Title = "Target",
+            Desc = "Type a target (e.g., Wolf) or 'All'",
+            Callback = function(text)
+                if not requireKeyGuard() then return end
+                if text and #text > 0 then
+                    KA.target = text
+                end
+            end
+        })
+    end
+
+    KillAuraTab:Space()
+
+    -- Radius (max 10000)
+    if type(KillAuraTab.Slider) == "function" then
+        KillAuraTab:Slider({
+            Title = "Radius",
+            Desc = "Kill Aura range (0 - 10000)",
+            Min = 0,
+            Max = 10000,
+            Default = KA.radius,
+            Callback = function(val)
+                if not requireKeyGuard() then return end
+                KA.radius = math.clamp(tonumber(val) or KA.radius, 0, 10000)
+                ensureSphere()
+            end
+        })
+    else
+        KillAuraTab:Input({
+            Title = "Radius",
+            Desc = "Enter a number (0 - 10000)",
+            Callback = function(text)
+                if not requireKeyGuard() then return end
+                local num = tonumber(text)
+                if num then
+                    KA.radius = math.clamp(num, 0, 10000)
+                    ensureSphere()
+                end
+            end
+        })
+    end
+
+    KillAuraTab:Space()
+
+    -- Show Radius
+    KillAuraTab:Toggle({
+        Title = "Show Radius",
+        Desc = "Display Kill Aura range circle",
+        Default = KA.showRadius,
+        Callback = function(v)
+            if not requireKeyGuard() then return end
+            KA.showRadius = v and true or false
+            ensureSphere()
+        end
+    })
+
+    -- Info (locked text)
+    KillAuraTab:Input({
+        Title = "Info",
+        Type = "Textarea",
+        Locked = true,
+        Desc = "All = kill every mob (even if not listed). Max radius 10000.",
+    })
+end
+
+-- Main loop
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        ensureSphere()
+
+        if not Key.valid or not KA.enabled then
+            continue
+        end
+
+        local char = getChar()
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then continue end
+
+        local targets = getTargetsInRadius(hrp.Position, KA.radius, KA.target)
+        for _, mob in ipairs(targets) do
+            killMob(mob)
+            task.wait(0.02)
+        end
+    end
+end)
+
+-- ESP updater
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if not Key.valid then
+            clearHighlights("mob"); clearHighlights("item"); clearHighlights("player")
+            continue
+        end
+        -- Mobs
+        if ESP.mobs then
+            for _, inst in ipairs(workspace:GetDescendants()) do
+                if inst:IsA("Model") and isMobModel(inst) then
+                    attachHighlight(inst, Color3.fromRGB(255, 80, 80), "mob")
+                end
+            end
+        end
+        -- Items/chests/drops (heuristic by name)
+        if ESP.items then
+            local keys = {"chest","crate","drop","loot","item","fruit","log","gun","fuel","gear"}
+            for _, inst in ipairs(workspace:GetDescendants()) do
+                local name = inst.Name or ""
+                for _, k in ipairs(keys) do
+                    if strContains(name, k) then
+                        local obj = inst:IsA("Model") and inst or (inst:IsA("BasePart") and inst.Parent)
+                        if obj then attachHighlight(obj, Color3.fromRGB(255, 255, 100), "item") end
+                        break
+                    end
+                end
+            end
+        end
+        -- Players (others)
+        if ESP.players then
+            for _, pl in ipairs(Players:GetPlayers()) do
+                if pl ~= LocalPlayer then
+                    local c = pl.Character
+                    if c then attachHighlight(c, Color3.fromRGB(100, 200, 255), "player") end
+                end
+            end
+        end
+    end
+end)
+
+-- Auto interact loop
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if not Key.valid or not AUTO.interact then continue end
+        local char = getChar(); local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then continue end
+        for _, prompt in ipairs(workspace:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                local part = prompt.Parent
+                local pos
+                if part and part:IsA("BasePart") then pos = part.Position
+                elseif part and part:IsA("Model") then
+                    local p = part.PrimaryPart or getHRP(part)
+                    pos = p and p.Position
+                end
+                if pos and (pos - hrp.Position).Magnitude <= AUTO.interactRadius then
+                    pcall(function() fireproximityprompt(prompt) end)
+                    task.wait(0.05)
+                end
+            end
+        end
+    end
+end)
+
+-- No-clip loop
+task.spawn(function()
+    RunService.Stepped:Connect(function()
+        if MOVE.noclip then
+            local char = getChar()
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
+                end
+            end
+        end
+    end)
+end)
