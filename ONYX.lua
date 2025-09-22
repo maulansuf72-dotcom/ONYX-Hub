@@ -53,6 +53,28 @@ local MAIN = { expandHitbox=false, hitboxSize=50, autoBandage=false, healBelow=4
 local PLAY = { antiAFK=false, fly=false, flySpeed=50, infiniteJump=false }
 local FISH = { autoCast=false, autoMini=false, bigBar=false, mode="Teleport" }
 
+-- Preset lists (best-effort; refined as we learn real names)
+local PRESETS = {
+    gears = {
+        "Frog Key","Bolt","Tyre","Sheet Metal","Old Radio","Broken Fan","Broken Microwave","Washing Machine","Old Car Engine",
+        "UFO Scrap","UFO Component","UFO Junk","Cultist Gem","Gem of the Forest","Gem of the Forest Fragment",
+    },
+    fuels = {
+        "Log","Sapling","Coal","Fuel Canister","Oil Barrel","Biofuel","Chair","Corpse",
+    },
+    foods = {
+        "Carrot","Berry","Morsel","Steak","Cooked Morsel","Cooked Steak","Ribs","Cooked Ribs","Bandage","MedKit","Chilli",
+    },
+    weapons = {
+        "Spear","Good Axe","Revolver","Rifle","Tactical Shotgun","Revolver Ammo","Rifle Ammo","Morningstar","Laser Sword","Raygun","Chainsaw",
+        "Alien Armour","Leather Body","Iron Body","Thorn Body","Riot Shield","Sack","Seed Box","Old Flashlight","Strong Flashlight","Bunny Foot",
+        "Wolf Pelt","Bear Pelt","Alpha Wolf Pelt","Arctic Fox Pelt","Polar Bear Pelt","Mammoth Tusk",
+    },
+    npcs = {"Fairy","Caravan","BirdWatcher","Pelt Trader"},
+    children = {"DinoKid","KrakenKid","SquidKid","KoalaKid"},
+    structures = {"Stronghold","AlienMothership","Frog Cave","Military Base","Ice Temple","Bell Tower","Research Facility","Anvil","Snow Clothing Shop"},
+}
+
 -- Tab: Auto (collect/rescue/campfire/chest)
 do
     local AutoTab = ElementsSection:Tab({ Title = "Auto", Icon = "bolt" })
@@ -115,7 +137,42 @@ do
             end
         end)
     end })
+    -- ESP filters by category (best-effort by keyword)
+    local espFilter = {enabled=false, keywords={}}
     VisTab:Toggle({ Title = "Reveal Locations", Desc = "Enable multiple ESPs", Callback=function(v) ESP.mobs=v ESP.items=v ESP.players=v end })
+    if type(VisTab.Dropdown) == "function" then
+        local curGear = PRESETS.gears[1]
+        VisTab:Dropdown({ Title = "Select Gears & Fuels", List = (function() local t={} for _,x in ipairs(PRESETS.gears) do table.insert(t,x) end for _,x in ipairs(PRESETS.fuels) do table.insert(t,x) end return t end)(), Selected = curGear, Callback=function(v) curGear=v end })
+        VisTab:Toggle({ Title = "Enable Gear and Fuel ESP", Callback=function(v)
+            espFilter.enabled = v and true or false
+            espFilter.keywords = {curGear}
+        end })
+        local curWeap = PRESETS.weapons[1]
+        VisTab:Dropdown({ Title = "Select Weapons & Other Items", List = PRESETS.weapons, Selected = curWeap, Callback=function(v) curWeap=v end })
+        VisTab:Toggle({ Title = "Enable Weapon and Other Items ESP", Callback=function(v)
+            espFilter.enabled = v and true or false
+            espFilter.keywords = {curWeap}
+        end })
+    end
+
+    -- Extend ESP updater to respect filters
+    task.spawn(function()
+        while true do
+            task.wait(1)
+            if ESP.items and espFilter.enabled and espFilter.keywords and #espFilter.keywords>0 then
+                for _, inst in ipairs(workspace:GetDescendants()) do
+                    local name = inst.Name or ""
+                    for _, k in ipairs(espFilter.keywords) do
+                        if strContains(name, k) then
+                            local obj = inst:IsA("Model") and inst or (inst:IsA("BasePart") and inst.Parent)
+                            if obj then attachHighlight(obj, Color3.fromRGB(180, 255, 180), "itemfilter") end
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end)
 end
 
 -- Tab: Players (movement & anti)
@@ -167,6 +224,59 @@ do
             WindUI:Notify({ Title = "ONYX", Desc = "Load failed or unsupported exploit", Time=4 })
         end
     end })
+
+    -- Shared helper: run bring by chosen keyword list
+    local function runBringByList(list)
+        task.spawn(function()
+            local myChar = getChar(); local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+            local maxn = bringState.maxPer or 50
+            local got = 0
+            while got < maxn do
+                task.wait(0.25)
+                local target = nearestInstanceByNameContains(myHRP.Position, list)
+                if not target then break end
+                local pos
+                if target:IsA("Model") then local p = target.PrimaryPart or getHRP(target); pos = p and p.Position elseif target:IsA("BasePart") then pos = target.Position end
+                if pos then myHRP.CFrame = CFrame.new(pos + Vector3.new(0,2,0)) end
+                for _, pp in ipairs((target:IsA("Model") and target:GetDescendants()) or {}) do
+                    if pp:IsA("ProximityPrompt") and pp.Enabled then pcall(function() fireproximityprompt(pp) end) end
+                end
+                got += 1
+            end
+        end)
+    end
+
+    -- Section: Gears
+    if type(BringTab.Dropdown) == "function" then
+        local curGear = PRESETS.gears[1]
+        BringTab:Dropdown({ Title = "Gears", List = PRESETS.gears, Selected = curGear, Callback = function(v) curGear = v end })
+        BringTab:Button({ Title = "Bring Gears", Callback = function() runBringByList({curGear}) end })
+    end
+
+    -- Section: Fuel (generic bring to campfire via preset)
+    if type(BringTab.Dropdown) == "function" then
+        local curFuel = PRESETS.fuels[1]
+        BringTab:Dropdown({ Title = "Fuel", List = PRESETS.fuels, Selected = curFuel, Callback = function(v) curFuel = v end })
+        BringTab:Button({ Title = "Bring Fuel", Callback = function()
+            -- Use generic bring loop to fetch fuel item by name
+            runBringByList({curFuel})
+        end })
+    end
+
+    -- Section: Food & Healing
+    if type(BringTab.Dropdown) == "function" then
+        local curFood = PRESETS.foods[1]
+        BringTab:Dropdown({ Title = "Food & Healing", List = PRESETS.foods, Selected = curFood, Callback = function(v) curFood = v end })
+        BringTab:Button({ Title = "Bring Food & Healing", Callback = function() runBringByList({curFood}) end })
+    end
+
+    -- Section: Guns & Armor
+    if type(BringTab.Dropdown) == "function" then
+        local curWeap = PRESETS.weapons[1]
+        BringTab:Dropdown({ Title = "Guns & Armor", List = PRESETS.weapons, Selected = curWeap, Callback = function(v) curWeap = v end })
+        BringTab:Button({ Title = "Bring Guns & Armor", Callback = function() runBringByList({curWeap}) end })
+    end
 end
 -- Helpers
 local function strContains(hay, needle)
@@ -442,6 +552,48 @@ do
         Locked = true,
         Desc = "All = kill every mob (even if not listed). Max radius 10000.",
     })
+
+    -- Teleport: NPC
+    if type(TPTab.Dropdown) == "function" then
+        local curNPC = PRESETS.npcs[1]
+        TPTab:Dropdown({ Title = "Select NPC", List = PRESETS.npcs, Selected = curNPC, Callback = function(v) curNPC = v end })
+        TPTab:Button({ Title = "TP to Selected NPC", Callback = function()
+            local me = getChar(); local hrp = me and me:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            local t = nearestInstanceByNameContains(hrp.Position, {curNPC})
+            local pos
+            if t then if t:IsA("Model") then local p=t.PrimaryPart or getHRP(t); pos=p and p.Position elseif t:IsA("BasePart") then pos=t.Position end end
+            if pos then hrp.CFrame = CFrame.new(pos + Vector3.new(0,3,0)) end
+        end })
+    end
+
+    -- Teleport: Child
+    if type(TPTab.Dropdown) == "function" then
+        local curChild = PRESETS.children[1]
+        TPTab:Dropdown({ Title = "Select Child", List = PRESETS.children, Selected = curChild, Callback = function(v) curChild = v end })
+        TPTab:Button({ Title = "Teleport to Child", Callback = function()
+            local me = getChar(); local hrp = me and me:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            local t = nearestInstanceByNameContains(hrp.Position, {curChild})
+            local pos
+            if t then if t:IsA("Model") then local p=t.PrimaryPart or getHRP(t); pos=p and p.Position elseif t:IsA("BasePart") then pos=t.Position end end
+            if pos then hrp.CFrame = CFrame.new(pos + Vector3.new(0,3,0)) end
+        end })
+    end
+
+    -- Teleport: Structure
+    if type(TPTab.Dropdown) == "function" then
+        local curStruct = PRESETS.structures[1]
+        TPTab:Dropdown({ Title = "Select Structure", List = PRESETS.structures, Selected = curStruct, Callback = function(v) curStruct = v end })
+        TPTab:Button({ Title = "TP to Selected Structure", Callback = function()
+            local me = getChar(); local hrp = me and me:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            local t = nearestInstanceByNameContains(hrp.Position, {curStruct})
+            local pos
+            if t then if t:IsA("Model") then local p=t.PrimaryPart or getHRP(t); pos=p and p.Position elseif t:IsA("BasePart") then pos=t.Position end end
+            if pos then hrp.CFrame = CFrame.new(pos + Vector3.new(0,3,0)) end
+        end })
+    end
 end
 
 -- Tab: Fishing (placeholders; refined with game data)
@@ -485,6 +637,67 @@ do
                     if pp:IsA("ProximityPrompt") and pp.Enabled then pcall(function() fireproximityprompt(pp) end) end
                 end
                 count += 1
+            end
+        end)
+    end })
+
+    -- Preset: Bring Fuel (Coal) -> Campfire
+    BringTab:Button({ Title = "Bring Fuel: Coal", Desc = "Collect Coal then fuel nearest Campfire", Callback = function()
+        task.spawn(function()
+            local myChar = getChar(); local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+            local maxn = bringState.maxPer or 25
+            local got = 0
+            while got < maxn do
+                task.wait(0.25)
+                -- 1) Ambil Coal terdekat
+                local coal = nearestInstanceByNameContains(myHRP.Position, {"coal"})
+                if coal then
+                    local cpos
+                    if coal:IsA("Model") then local p = coal.PrimaryPart or getHRP(coal); cpos = p and p.Position elseif coal:IsA("BasePart") then cpos = coal.Position end
+                    if cpos then myHRP.CFrame = CFrame.new(cpos + Vector3.new(0,2,0)) end
+                    for _, pp in ipairs((coal:IsA("Model") and coal:GetDescendants()) or {}) do
+                        if pp:IsA("ProximityPrompt") and pp.Enabled then pcall(function() fireproximityprompt(pp) end) end
+                    end
+                else
+                    break
+                end
+
+                task.wait(0.25)
+                -- 2) Pergi ke Campfire terdekat dan fuel
+                local camp = nearestInstanceByNameContains(myHRP.Position, {"campfire","bonfire","fire"})
+                if camp then
+                    local fpos
+                    if camp:IsA("Model") then local p = camp.PrimaryPart or getHRP(camp); fpos = p and p.Position elseif camp:IsA("BasePart") then fpos = camp.Position end
+                    if fpos then myHRP.CFrame = CFrame.new(fpos + Vector3.new(0,2,0)) end
+                    for _, pp in ipairs((camp:IsA("Model") and camp:GetDescendants()) or {}) do
+                        if pp:IsA("ProximityPrompt") and pp.Enabled then pcall(function() fireproximityprompt(pp) end) end
+                    end
+                end
+
+                got += 1
+            end
+        end)
+    end })
+
+    -- Preset: Bring Other (Flower)
+    BringTab:Button({ Title = "Bring Other: Flower", Desc = "Collect Flower nearby (repeat)", Callback = function()
+        task.spawn(function()
+            local myChar = getChar(); local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+            local maxn = bringState.maxPer or 25
+            local got = 0
+            while got < maxn do
+                task.wait(0.25)
+                local flw = nearestInstanceByNameContains(myHRP.Position, {"flower"})
+                if not flw then break end
+                local pos
+                if flw:IsA("Model") then local p = flw.PrimaryPart or getHRP(flw); pos = p and p.Position elseif flw:IsA("BasePart") then pos = flw.Position end
+                if pos then myHRP.CFrame = CFrame.new(pos + Vector3.new(0,2,0)) end
+                for _, pp in ipairs((flw:IsA("Model") and flw:GetDescendants()) or {}) do
+                    if pp:IsA("ProximityPrompt") and pp.Enabled then pcall(function() fireproximityprompt(pp) end) end
+                end
+                got += 1
             end
         end)
     end })
