@@ -1,5 +1,4 @@
 -- ONYX v0.1 for 99 Nights in the Forest
--- Key: AyamGoreng! | Key Link: https://link-hub.net/1392772/AfVHcFNYkLMx
 
 -- Load WindUI
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
@@ -12,6 +11,121 @@ local CollectionService = game:GetService("CollectionService")
 local LocalPlayer = Players.LocalPlayer
 local function getChar() return LocalPlayer and LocalPlayer.Character end
 
+-- Tab: Auto (collect/rescue/campfire/chest)
+do
+    local AutoTab = ElementsSection:Tab({ Title = "Auto", Icon = "bolt" })
+    local auto2 = { flowers=false, coins=false, chestOpen=false, rescueKids=false, fuel=false, fuelType="Log", startFuel=50 }
+    AutoTab:Toggle({ Title = "AutoCollect Flowers", Callback = function(v) auto2.flowers = v and true or false end })
+    AutoTab:Toggle({ Title = "AutoCollect Coins", Callback = function(v) auto2.coins = v and true or false end })
+    AutoTab:Toggle({ Title = "Open All Chest", Callback = function(v) auto2.chestOpen = v and true or false end })
+    AutoTab:Toggle({ Title = "Auto Rescue Kids", Callback = function(v) auto2.rescueKids = v and true or false end })
+    AutoTab:Toggle({ Title = "Auto Fuel Campfire", Callback = function(v) auto2.fuel = v and true or false end })
+    if type(AutoTab.Dropdown) == "function" then
+        AutoTab:Dropdown({ Title = "Select Fuels", List = {"Log","Coal","Fuel","Wood"}, Selected = auto2.fuelType, Callback = function(o) auto2.fuelType=o end })
+    end
+    if type(AutoTab.Slider) == "function" then
+        AutoTab:Slider({ Title = "Start Fueling When", Min=10, Max=95, Default=auto2.startFuel, Callback=function(v) auto2.startFuel = math.clamp(tonumber(v) or auto2.startFuel,10,95) end })
+    end
+
+    -- background worker
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
+            local char = getChar(); local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp then continue end
+
+            local function collectByKeys(keys, radius)
+                local target = nearestInstanceByNameContains(hrp.Position, keys)
+                if target then
+                    local pos
+                    if target:IsA("Model") then local p = target.PrimaryPart or getHRP(target); pos = p and p.Position elseif target:IsA("BasePart") then pos = target.Position end
+                    if pos and (pos - hrp.Position).Magnitude <= (radius or 200) then
+                        hrp.CFrame = CFrame.new(pos + Vector3.new(0,2,0))
+                        for _, pp in ipairs((target:IsA("Model") and target:GetDescendants()) or {}) do
+                            if pp:IsA("ProximityPrompt") and pp.Enabled then pcall(function() fireproximityprompt(pp) end) end
+                        end
+                    end
+                end
+            end
+
+            if auto2.flowers then collectByKeys({"flower"}, 300) end
+            if auto2.coins then collectByKeys({"coin"}, 300) end
+            if auto2.chestOpen then collectByKeys({"chest","crate"}, 500) end
+            if auto2.rescueKids then collectByKeys({"child","kid"}, 600) end
+            if auto2.fuel then collectByKeys({string.lower(auto2.fuelType or "log")}, 500) collectByKeys({"campfire","bonfire"}, 500) end
+        end
+    end)
+end
+
+-- Tab: Visuals (FPS Boost & ESP reveals)
+do
+    local VisTab = ElementsSection:Tab({ Title = "Visuals", Icon = "eye" })
+    local Lighting = game:GetService("Lighting")
+    local overlay
+    VisTab:Toggle({ Title = "Full Bright", Callback=function(v) pcall(function() if v then Lighting.Brightness=3 Lighting.ExposureCompensation=0.6 else Lighting.Brightness=1 Lighting.ExposureCompensation=0 end end) end })
+    VisTab:Toggle({ Title = "Lower Graphics", Callback=function(v) pcall(function() settings().Rendering.QualityLevel = v and Enum.QualityLevel.Level01 or Enum.QualityLevel.Automatic end) end })
+    VisTab:Toggle({ Title = "Blackscreen", Callback=function(v)
+        pcall(function()
+            if v then
+                if not overlay then overlay = Instance.new("ScreenGui"); overlay.Name = "ONYX_Black"; overlay.ResetOnSpawn=false; overlay.Parent = game:GetService("CoreGui"); local f=Instance.new("Frame", overlay); f.BackgroundColor3=Color3.new(0,0,0); f.Size=UDim2.fromScale(1,1) end
+            else
+                if overlay then overlay:Destroy() overlay=nil end
+            end
+        end)
+    end })
+    VisTab:Toggle({ Title = "Reveal Locations", Desc = "Enable multiple ESPs", Callback=function(v) ESP.mobs=v ESP.items=v ESP.players=v end })
+end
+
+-- Tab: Players (movement & anti)
+do
+    local PTab = ElementsSection:Tab({ Title = "Players", Icon = "user" })
+    PTab:Toggle({ Title = "AntiAFK", Callback=function(v)
+        PLAY.antiAFK = v and true or false
+        if v then
+            local vu = game:GetService("VirtualUser")
+            if not PLAY._afkConn then
+                PLAY._afkConn = Players.LocalPlayer.Idled:Connect(function()
+                    vu:CaptureController()
+                    vu:ClickButton2(Vector2.new())
+                end)
+            end
+        else
+            if PLAY._afkConn then pcall(function() PLAY._afkConn:Disconnect() end) PLAY._afkConn=nil end
+        end
+    end })
+
+    PTab:Toggle({ Title = "Fly", Callback=function(v) PLAY.fly = v and true or false end })
+    if type(PTab.Slider) == "function" then
+        PTab:Slider({ Title = "Fly Speed", Min=10, Max=300, Default=PLAY.flySpeed, Callback=function(val) PLAY.flySpeed = math.clamp(tonumber(val) or PLAY.flySpeed,10,300) end })
+    end
+    PTab:Toggle({ Title = "Infinite Jump", Callback=function(v) PLAY.infiniteJump = v and true or false end })
+end
+
+-- Tab: Settings (Config save/load; best-effort if exploit supports filesystem)
+do
+    local STab = ElementsSection:Tab({ Title = "Settings", Icon = "gear" })
+    local cfg = { name = "Default" }
+    STab:Input({ Title = "Config Name", Callback=function(t) if t and #t>0 then cfg.name=t end end })
+    STab:Button({ Title = "Save Config", Callback=function()
+        local ok, err = pcall(function()
+            if writefile then
+                local data = game:GetService("HttpService"):JSONEncode({KA=KA, ESP=ESP, TP=TP, AUTO=AUTO, MOVE=MOVE, WORLD=WORLD, MAIN=MAIN, PLAY=PLAY, FISH=FISH})
+                writefile("ONYX_"..cfg.name..".json", data)
+            end
+        end)
+        WindUI:Notify({ Title = "ONYX", Desc = ok and "Config saved" or ("Save failed: "..tostring(err)), Time=4 })
+    end })
+    STab:Button({ Title = "Load Config", Callback=function()
+        local ok, data = pcall(function() if readfile then return readfile("ONYX_"..cfg.name..".json") end end)
+        if ok and data then
+            local ok2, tbl = pcall(function() return game:GetService("HttpService"):JSONDecode(data) end)
+            if ok2 and tbl then KA=tbl.KA or KA ESP=tbl.ESP or ESP TP=tbl.TP or TP AUTO=tbl.AUTO or AUTO MOVE=tbl.MOVE or MOVE WORLD=tbl.WORLD or WORLD MAIN=tbl.MAIN or MAIN PLAY=tbl.PLAY or PLAY FISH=tbl.FISH or FISH end
+            WindUI:Notify({ Title = "ONYX", Desc = "Config loaded", Time=4 })
+        else
+            WindUI:Notify({ Title = "ONYX", Desc = "Load failed or unsupported exploit", Time=4 })
+        end
+    end })
+end
 -- Window (template)
 local Window = WindUI:CreateWindow({
     Title = "ONYX Hub",
@@ -33,10 +147,6 @@ Window:EditOpenButton({
 })
 
 -- Global state
-local Key = {
-    required = "AyamGoreng!",
-    valid = false,
-}
 local KA = {
     enabled = false,
     showRadius = true,
@@ -69,6 +179,33 @@ local MOVE = {
 local WORLD = {
     nightVision = false,
     noFog = false,
+}
+
+-- Main (health/eat/hitbox)
+local MAIN = {
+    expandHitbox = false,
+    hitboxSize = 50,
+    autoBandage = false,
+    healBelow = 40,
+    autoEat = false,
+    eatBelow = 50,
+    eatFoods = {"Carrot","Apple","Berry","Meat","Morsel"},
+}
+
+-- Players (extra)
+local PLAY = {
+    antiAFK = false,
+    fly = false,
+    flySpeed = 50,
+    infiniteJump = false,
+}
+
+-- Fishing (placeholders)
+local FISH = {
+    autoCast = false,
+    autoMini = false,
+    bigBar = false,
+    mode = "Teleport",
 }
 
 -- Helpers
@@ -158,59 +295,6 @@ local function ensureSphere()
     sphereAdornment.Visible = KA.showRadius and (sphereAdornment.Adornee ~= nil)
 end
 
--- Section (template)
-local ElementsSection = Window:Section({
-    Title = "Elements",
-})
-
--- Tab: Key (gate)
-do
-    local KeyTab = ElementsSection:Tab({
-        Title = "Key",
-        Icon = "key"
-    })
-
-    KeyTab:Input({
-        Title = "Enter Key",
-        Desc = "Enter the key to unlock ONYX features",
-        Callback = function(text)
-            if text == Key.required then
-                Key.valid = true
-                WindUI:Notify({
-                    Title = "ONYX",
-                    Desc = "Key valid! Features unlocked.",
-                    Time = 5
-                })
-            else
-                Key.valid = false
-                WindUI:Notify({
-                    Title = "ONYX",
-                    Desc = "Invalid key. Try again.",
-                    Time = 4
-                })
-            end
-        end
-    })
-
-    KeyTab:Button({
-        Title = "Get Key",
-        Desc = "Open key link (copied to clipboard)",
-        Icon = "link",
-        Callback = function()
-            setclipboard("https://link-hub.net/1392772/AfVHcFNYkLMx")
-            WindUI:Notify({
-                Title = "ONYX",
-                Desc = "Key link copied to clipboard.",
-                Time = 4
-            })
-        end
-    })
-end
-
--- Tab: Kill Aura
-do
-    local KillAuraTab = ElementsSection:Tab({
-        Title = "Kill Aura",
         Icon = "swords",
     })
 
@@ -314,6 +398,52 @@ do
         Locked = true,
         Desc = "All = kill every mob (even if not listed). Max radius 10000.",
     })
+end
+
+-- Tab: Fishing (placeholders; refined with game data)
+do
+    local FishTab = ElementsSection:Tab({ Title = "Fishing", Icon = "fish" })
+    FishTab:Toggle({ Title = "Auto Cast", Callback = function(v) FISH.autoCast = v and true or false end })
+    FishTab:Toggle({ Title = "Auto Minigames", Callback = function(v) FISH.autoMini = v and true or false end })
+    FishTab:Toggle({ Title = "Bigger Success Bar", Callback = function(v) FISH.bigBar = v and true or false end })
+    if type(FishTab.Dropdown) == "function" then
+        FishTab:Dropdown({ Title = "Mode", List = {"Teleport","Stand"}, Selected = FISH.mode, Callback = function(opt) FISH.mode = opt or "Teleport" end })
+    end
+    FishTab:Input({ Title = "Note", Type = "Textarea", Locked = true, Desc = "Auto-cast rod & auto-complete prompts when available." })
+end
+
+-- Tab: Bring (generic, will refine later)
+do
+    local BringTab = ElementsSection:Tab({ Title = "Bring", Icon = "box" })
+    BringTab:Input({ Title = "Info", Type = "Textarea", Locked = true, Desc = "Brings items by teleporting to them and interacting (client-side)." })
+    local bringState = { category = "Guns", maxPer = 50, targetLoc = "Player" }
+    if type(BringTab.Dropdown) == "function" then
+        BringTab:Dropdown({ Title = "Bring Location", List = {"Player","Campfire"}, Selected = bringState.targetLoc, Callback = function(o) bringState.targetLoc = o end })
+    end
+    BringTab:Input({ Title = "Max Per Item", Desc = "e.g., 1000", Callback = function(t) local n=tonumber(t) if n then bringState.maxPer=n end end })
+    BringTab:Input({ Title = "Item Keywords (comma)", Desc = "e.g., Log,Fuel,Sheet", Callback = function(text) bringState.category = text end })
+    BringTab:Button({ Title = "Start Bring", Callback = function()
+        task.spawn(function()
+            local myChar = getChar(); local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+            local count = 0
+            while count < (bringState.maxPer or 50) do
+                task.wait(0.2)
+                local keys={}
+                for s in string.gmatch(bringState.category or '', '[^,]+') do table.insert(keys, (s:gsub('^%s+',''):gsub('%s+$',''))) end
+                local target = nearestInstanceByNameContains(myHRP.Position, keys)
+                if not target then break end
+                local pos
+                if target:IsA("Model") then local p = target.PrimaryPart or getHRP(target); pos = p and p.Position elseif target:IsA("BasePart") then pos = target.Position end
+                if pos then myHRP.CFrame = CFrame.new(pos + Vector3.new(0,2,0)) end
+                -- try prompt
+                for _, pp in ipairs((target:IsA("Model") and target:GetDescendants()) or {}) do
+                    if pp:IsA("ProximityPrompt") and pp.Enabled then pcall(function() fireproximityprompt(pp) end) end
+                end
+                count += 1
+            end
+        end)
+    end })
 end
 
 -- Tab: Teleport
@@ -478,6 +608,92 @@ task.spawn(function()
                     if part:IsA("BasePart") then part.CanCollide = false end
                 end
             end
+        end
+    end)
+end)
+
+-- Expand Hitbox worker (client-side best-effort)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if not MAIN.expandHitbox then continue end
+        for _, m in ipairs(workspace:GetDescendants()) do
+            if m:IsA("Model") and isMobModel(m) then
+                local hrp = getHRP(m)
+                if hrp and hrp:IsA("BasePart") then pcall(function() hrp.Size = Vector3.new(MAIN.hitboxSize, MAIN.hitboxSize, MAIN.hitboxSize) end) end
+            end
+        end
+    end
+end)
+
+-- Auto Heal/Eat worker
+task.spawn(function()
+    while true do
+        task.wait(0.25)
+        local char = getChar(); if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if MAIN.autoBandage and hum.Health <= MAIN.healBelow then
+                -- try use bandage tool
+                local function useToolByKeys(keys)
+                    local function findTool(container)
+                        for _, t in ipairs(container:GetChildren()) do
+                            if t:IsA("Tool") then
+                                for _, k in ipairs(keys) do if strContains(t.Name, k) then return t end end
+                            end
+                        end
+                    end
+                    local bp = LocalPlayer.Backpack
+                    local tool = (bp and findTool(bp)) or findTool(char)
+                    if tool then pcall(function() tool.Parent = char tool:Activate() end) return true end
+                end
+                useToolByKeys({"bandage","med","heal"})
+            end
+        end
+        if MAIN.autoEat then
+            -- try eat from backpack/character by activating tools with food names
+            local keys = MAIN.eatFoods or {}
+            local function tryFoods()
+                local bp = LocalPlayer.Backpack
+                local function findTool(container)
+                    for _, t in ipairs(container:GetChildren()) do
+                        if t:IsA("Tool") then for _, k in ipairs(keys) do if strContains(t.Name, k) then return t end end end
+                    end
+                end
+                local tool = (bp and findTool(bp)) or findTool(char)
+                if tool then pcall(function() tool.Parent = char tool:Activate() end) end
+            end
+            if hum and hum.Health <= MAIN.eatBelow then tryFoods() end
+        end
+    end
+end)
+
+-- Fly & Infinite Jump
+task.spawn(function()
+    local UIS = game:GetService("UserInputService")
+    local flying = false
+    local dir = Vector3.new()
+    UIS.InputBegan:Connect(function(i,g)
+        if g then return end
+        if i.KeyCode == Enum.KeyCode.Space and PLAY.infiniteJump then
+            local char = getChar(); local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end)
+    RunService.RenderStepped:Connect(function(dt)
+        local char = getChar(); local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        if PLAY.fly then
+            local cam = workspace.CurrentCamera
+            local move = Vector3.new()
+            if UIS:IsKeyDown(Enum.KeyCode.W) then move = move + cam.CFrame.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then move = move - cam.CFrame.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then move = move - cam.CFrame.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then move = move + cam.CFrame.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0,1,0) end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0,1,0) end
+            hrp.Velocity = move.Unit * (PLAY.flySpeed or 50)
+            hrp.AssemblyLinearVelocity = hrp.Velocity
         end
     end)
 end)
