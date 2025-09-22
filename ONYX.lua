@@ -11,6 +11,31 @@ local CollectionService = game:GetService("CollectionService")
 local LocalPlayer = Players.LocalPlayer
 local function getChar() return LocalPlayer and LocalPlayer.Character end
 
+-- Window (template)
+local Window = WindUI:CreateWindow({
+    Title = "ONYX Hub",
+    Author = "",
+    NewElements = true,
+})
+
+--Window:SetTitle(Window.Title .. " | " .. WindUI.Version)
+
+Window:EditOpenButton({
+    Title = "Open ONYX Hub UI",
+    CornerRadius = UDim.new(1,0),
+    StrokeThickness = 0,
+    Enabled = true,
+    Draggable = true,
+    -- Icon = "monitor",
+    -- Color = ColorSequence.new(Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
+    -- OnlyMobile = false,
+})
+
+-- Section (template)
+local ElementsSection = Window:Section({
+    Title = "Elements",
+})
+
 -- Tab: Auto (collect/rescue/campfire/chest)
 do
     local AutoTab = ElementsSection:Tab({ Title = "Auto", Icon = "bolt" })
@@ -295,6 +320,10 @@ local function ensureSphere()
     sphereAdornment.Visible = KA.showRadius and (sphereAdornment.Adornee ~= nil)
 end
 
+-- Tab: Kill Aura
+do
+    local KillAuraTab = ElementsSection:Tab({
+        Title = "Kill Aura",
         Icon = "swords",
     })
 
