@@ -36,6 +36,23 @@ local ElementsSection = Window:Section({
     Title = "Elements",
 })
 
+-- Global state (must be declared before any tabs use them)
+local KA = {
+    enabled = false,
+    showRadius = true,
+    radius = 500,
+    target = "All",
+}
+
+local ESP = { mobs = false, items = false, players = false }
+local TP = { playerTarget = nil }
+local AUTO = { interact = false, interactRadius = 25 }
+local MOVE = { walkspeed = 16, jumppower = 50, noclip = false }
+local WORLD = { nightVision = false, noFog = false }
+local MAIN = { expandHitbox=false, hitboxSize=50, autoBandage=false, healBelow=40, autoEat=false, eatBelow=50, eatFoods={"Carrot","Apple","Berry","Meat","Morsel"} }
+local PLAY = { antiAFK=false, fly=false, flySpeed=50, infiniteJump=false }
+local FISH = { autoCast=false, autoMini=false, bigBar=false, mode="Teleport" }
+
 -- Tab: Auto (collect/rescue/campfire/chest)
 do
     local AutoTab = ElementsSection:Tab({ Title = "Auto", Icon = "bolt" })
@@ -151,88 +168,6 @@ do
         end
     end })
 end
--- Window (template)
-local Window = WindUI:CreateWindow({
-    Title = "ONYX Hub",
-    Author = "",
-    NewElements = true,
-})
-
---Window:SetTitle(Window.Title .. " | " .. WindUI.Version)
-
-Window:EditOpenButton({
-    Title = "Open ONYX Hub UI",
-    CornerRadius = UDim.new(1,0),
-    StrokeThickness = 0,
-    Enabled = true,
-    Draggable = true,
-    -- Icon = "monitor",
-    -- Color = ColorSequence.new(Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
-    -- OnlyMobile = false,
-})
-
--- Global state
-local KA = {
-    enabled = false,
-    showRadius = true,
-    radius = 500,
-    target = "All",
-}
-
--- ESP/Teleport/Auto/Movement/World states
-local ESP = {
-    mobs = false,
-    items = false,
-    players = false,
-}
-
-local TP = {
-    playerTarget = nil,
-}
-
-local AUTO = {
-    interact = false, -- auto interact/loot nearby ProximityPrompts
-    interactRadius = 25,
-}
-
-local MOVE = {
-    walkspeed = 16,
-    jumppower = 50,
-    noclip = false,
-}
-
-local WORLD = {
-    nightVision = false,
-    noFog = false,
-}
-
--- Main (health/eat/hitbox)
-local MAIN = {
-    expandHitbox = false,
-    hitboxSize = 50,
-    autoBandage = false,
-    healBelow = 40,
-    autoEat = false,
-    eatBelow = 50,
-    eatFoods = {"Carrot","Apple","Berry","Meat","Morsel"},
-}
-
--- Players (extra)
-local PLAY = {
-    antiAFK = false,
-    fly = false,
-    flySpeed = 50,
-    infiniteJump = false,
-}
-
--- Fishing (placeholders)
-local FISH = {
-    autoCast = false,
-    autoMini = false,
-    bigBar = false,
-    mode = "Teleport",
-}
-
 -- Helpers
 local function strContains(hay, needle)
     if typeof(hay) ~= "string" or typeof(needle) ~= "string" then return false end
