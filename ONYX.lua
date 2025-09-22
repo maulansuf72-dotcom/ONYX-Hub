@@ -14,15 +14,15 @@ local function getChar() return LocalPlayer and LocalPlayer.Character end
 
 -- Window (template)
 local Window = WindUI:CreateWindow({
-    Title = "ONYX",
-    Author = "by RYXu",
+    Title = "ONYX Hub",
+    Author = "",
     NewElements = true,
 })
 
 --Window:SetTitle(Window.Title .. " | " .. WindUI.Version)
 
 Window:EditOpenButton({
-    Title = "Open ONYX hub UI",
+    Title = "Open ONYX Hub UI",
     CornerRadius = UDim.new(1,0),
     StrokeThickness = 0,
     Enabled = true,
@@ -214,24 +214,11 @@ do
         Icon = "swords",
     })
 
-    local function requireKeyGuard()
-        if not Key.valid then
-            WindUI:Notify({
-                Title = "ONYX",
-                Desc = "Please enter a valid key in the Key tab.",
-                Time = 4
-            })
-            return false
-        end
-        return true
-    end
-
     -- Toggle ON/OFF
     KillAuraTab:Toggle({
         Title = "Enable Kill Aura",
         Desc = "Auto-kill mobs within radius",
         Callback = function(v)
-            if not requireKeyGuard() then return end
             KA.enabled = v and true or false
         end
     })
@@ -263,7 +250,6 @@ do
             List = TARGET_LIST,
             Selected = "All",
             Callback = function(opt)
-                if not requireKeyGuard() then return end
                 KA.target = opt or "All"
             end
         })
@@ -272,7 +258,6 @@ do
             Title = "Target",
             Desc = "Type a target (e.g., Wolf) or 'All'",
             Callback = function(text)
-                if not requireKeyGuard() then return end
                 if text and #text > 0 then
                     KA.target = text
                 end
@@ -291,7 +276,6 @@ do
             Max = 10000,
             Default = KA.radius,
             Callback = function(val)
-                if not requireKeyGuard() then return end
                 KA.radius = math.clamp(tonumber(val) or KA.radius, 0, 10000)
                 ensureSphere()
             end
@@ -301,7 +285,6 @@ do
             Title = "Radius",
             Desc = "Enter a number (0 - 10000)",
             Callback = function(text)
-                if not requireKeyGuard() then return end
                 local num = tonumber(text)
                 if num then
                     KA.radius = math.clamp(num, 0, 10000)
@@ -319,7 +302,6 @@ do
         Desc = "Display Kill Aura range circle",
         Default = KA.showRadius,
         Callback = function(v)
-            if not requireKeyGuard() then return end
             KA.showRadius = v and true or false
             ensureSphere()
         end
@@ -334,13 +316,80 @@ do
     })
 end
 
+-- Tab: Teleport
+do
+    local TPTab = ElementsSection:Tab({
+        Title = "Teleport",
+        Icon = "map-pin",
+    })
+
+    -- Simpler and stable: Input for player name
+    TPTab:Input({
+        Title = "Player",
+        Desc = "Type player name to teleport",
+        Callback = function(text) TP.playerTarget = text end
+    })
+
+    TPTab:Button({
+        Title = "Teleport to Player",
+        Desc = "Teleport to typed player name",
+        Callback = function()
+            local target = TP.playerTarget and Players:FindFirstChild(TP.playerTarget)
+            local char = target and target.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local myChar = getChar(); local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if myHRP and hrp then myHRP.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end
+        end
+    })
+
+    TPTab:Button({
+        Title = "Teleport to Campfire",
+        Desc = "Teleport to nearest campfire",
+        Callback = function()
+            local myChar = getChar(); local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+            local target = nearestInstanceByNameContains(myHRP.Position, {"campfire","bonfire","fire"})
+            local pos
+            if target then
+                if target:IsA("Model") then
+                    local p = target.PrimaryPart or (target:FindFirstChild("HumanoidRootPart"))
+                    pos = p and p.Position
+                elseif target:IsA("BasePart") then
+                    pos = target.Position
+                end
+            end
+            if pos then myHRP.CFrame = CFrame.new(pos + Vector3.new(0,3,0)) end
+        end
+    })
+
+    TPTab:Button({
+        Title = "Teleport to Lost Child",
+        Desc = "Teleport to nearest child",
+        Callback = function()
+            local myChar = getChar(); local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+            local target = nearestInstanceByNameContains(myHRP.Position, {"child","lost"})
+            local pos
+            if target then
+                if target:IsA("Model") then
+                    local p = target.PrimaryPart or (target:FindFirstChild("HumanoidRootPart"))
+                    pos = p and p.Position
+                elseif target:IsA("BasePart") then
+                    pos = target.Position
+                end
+            end
+            if pos then myHRP.CFrame = CFrame.new(pos + Vector3.new(0,3,0)) end
+        end
+    })
+end
+
 -- Main loop
 task.spawn(function()
     while true do
         task.wait(0.1)
         ensureSphere()
 
-        if not Key.valid or not KA.enabled then
+        if not KA.enabled then
             continue
         end
 
@@ -360,10 +409,6 @@ end)
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if not Key.valid then
-            clearHighlights("mob"); clearHighlights("item"); clearHighlights("player")
-            continue
-        end
         -- Mobs
         if ESP.mobs then
             for _, inst in ipairs(workspace:GetDescendants()) do
@@ -402,7 +447,7 @@ end)
 task.spawn(function()
     while true do
         task.wait(0.2)
-        if not Key.valid or not AUTO.interact then continue end
+        if not AUTO.interact then continue end
         local char = getChar(); local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then continue end
         for _, prompt in ipairs(workspace:GetDescendants()) do
