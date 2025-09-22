@@ -84,10 +84,10 @@ do
     AutoTab:Toggle({ Title = "Open All Chest", Callback = function(v) auto2.chestOpen = v and true or false end })
     AutoTab:Toggle({ Title = "Auto Rescue Kids", Callback = function(v) auto2.rescueKids = v and true or false end })
     AutoTab:Toggle({ Title = "Auto Fuel Campfire", Callback = function(v) auto2.fuel = v and true or false end })
-    if type(AutoTab.Dropdown) == "function" then
+    if AutoTab and type(AutoTab.Dropdown) == "function" then
         AutoTab:Dropdown({ Title = "Select Fuels", List = {"Log","Coal","Fuel","Wood"}, Selected = auto2.fuelType, Callback = function(o) auto2.fuelType=o end })
     end
-    if type(AutoTab.Slider) == "function" then
+    if AutoTab and type(AutoTab.Slider) == "function" then
         AutoTab:Slider({ Title = "Start Fueling When", Min=10, Max=95, Default=auto2.startFuel, Callback=function(v) auto2.startFuel = math.clamp(tonumber(v) or auto2.startFuel,10,95) end })
     end
 
@@ -123,7 +123,7 @@ end
 
 -- Tab: Visuals (FPS Boost & ESP reveals)
 do
-    local VisTab = ElementsSection:Tab({ Title = "Visuals", Icon = "eye" })
+    local VisTab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({ Title = "Visuals", Icon = "eye" }) or nil
     local Lighting = game:GetService("Lighting")
     local overlay
     VisTab:Toggle({ Title = "Full Bright", Callback=function(v) pcall(function() if v then Lighting.Brightness=3 Lighting.ExposureCompensation=0.6 else Lighting.Brightness=1 Lighting.ExposureCompensation=0 end end) end })
@@ -140,7 +140,7 @@ do
     -- ESP filters by category (best-effort by keyword)
     local espFilter = {enabled=false, keywords={}}
     VisTab:Toggle({ Title = "Reveal Locations", Desc = "Enable multiple ESPs", Callback=function(v) ESP.mobs=v ESP.items=v ESP.players=v end })
-    if type(VisTab.Dropdown) == "function" then
+    if VisTab and type(VisTab.Dropdown) == "function" then
         local curGear = PRESETS.gears[1]
         VisTab:Dropdown({ Title = "Select Gears & Fuels", List = (function() local t={} for _,x in ipairs(PRESETS.gears) do table.insert(t,x) end for _,x in ipairs(PRESETS.fuels) do table.insert(t,x) end return t end)(), Selected = curGear, Callback=function(v) curGear=v end })
         VisTab:Toggle({ Title = "Enable Gear and Fuel ESP", Callback=function(v)
