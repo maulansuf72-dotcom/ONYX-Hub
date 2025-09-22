@@ -174,6 +174,86 @@ local function strContains(hay, needle)
     return string.find(string.lower(hay), string.lower(needle), 1, true) ~= nil
 end
 
+-- Safe shim for fireproximityprompt if executor doesn't provide it
+if not getfenv().fireproximityprompt then
+    getfenv().fireproximityprompt = function(prompt)
+        pcall(function()
+            if prompt and prompt.InputHoldBegin then
+                prompt:InputHoldBegin()
+                task.wait(prompt.HoldDuration or 0.05)
+                prompt:InputHoldEnd()
+            end
+        end)
+    end
+end
+
+-- Get HumanoidRootPart/PrimaryPart of a Model
+local function getHRP(model)
+    if not model then return nil end
+    if typeof(model) == "Instance" then
+        if model:IsA("Model") then
+            return model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+        elseif model:IsA("BasePart") then
+            return model
+        end
+    end
+    return nil
+end
+
+-- Find nearest instance whose Name contains any of the provided keywords
+local function nearestInstanceByNameContains(originPos, keys)
+    if typeof(originPos) ~= "Vector3" then return nil end
+    local best, bestDist
+    for _, inst in ipairs(workspace:GetDescendants()) do
+        local name = inst.Name or ""
+        for _, k in ipairs(keys or {}) do
+            if strContains(name, k) then
+                local pos
+                if inst:IsA("BasePart") then
+                    pos = inst.Position
+                elseif inst:IsA("Model") then
+                    local p = getHRP(inst)
+                    pos = p and p.Position or nil
+                end
+                if pos then
+                    local d = (pos - originPos).Magnitude
+                    if not bestDist or d < bestDist then
+                        best, bestDist = inst, d
+                    end
+                end
+                break
+            end
+        end
+    end
+    return best
+end
+
+-- Attach or refresh a Highlight to a model/part
+local function attachHighlight(target, color, key)
+    local obj = target
+    if not obj then return end
+    if obj:IsA("BasePart") then obj = obj.Parent end
+    if not (obj and obj:IsA("Model")) then return end
+    local name = "ONYX_HL_" .. tostring(key or "default")
+    local hl = obj:FindFirstChild(name)
+    if not hl then
+        hl = Instance.new("Highlight")
+        hl.Name = name
+        hl.FillTransparency = 0.75
+        hl.OutlineTransparency = 0
+        hl.Adornee = obj
+        hl.Parent = obj
+    end
+    if color then
+        pcall(function()
+            hl.FillColor = color
+            hl.OutlineColor = color
+        end)
+    end
+    hl.Enabled = true
+    return hl
+end
+
 -- Mob detection (generic; can be refined with your game’s tags/folders)
 local function isMobModel(model)
     if not model or not model:IsA("Model") then return false end
