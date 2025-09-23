@@ -179,6 +179,7 @@ end
 -- Tab: Players (movement & anti)
 do
     local PTab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({ Title = "Players", Icon = "user" }) or nil
+    if not PTab then return end
     PTab:Toggle({ Title = "AntiAFK", Callback=function(v)
         PLAY.antiAFK = v and true or false
         if v then
@@ -203,7 +204,8 @@ end
 
 -- Tab: Settings (Config save/load; best-effort if exploit supports filesystem)
 do
-    local STab = ElementsSection:Tab({ Title = "Settings", Icon = "gear" })
+    local STab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({ Title = "Settings", Icon = "gear" }) or nil
+    if not STab then return end
     local cfg = { name = "Default" }
     STab:Input({ Title = "Config Name", Callback=function(t) if t and #t>0 then cfg.name=t end end })
     STab:Button({ Title = "Save Config", Callback=function()
@@ -599,7 +601,8 @@ end
 
 -- Tab: Fishing (placeholders; refined with game data)
 do
-    local FishTab = ElementsSection:Tab({ Title = "Fishing", Icon = "fish" })
+    local FishTab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({ Title = "Fishing", Icon = "fish" }) or nil
+    if not FishTab then return end
     FishTab:Toggle({ Title = "Auto Cast", Callback = function(v) FISH.autoCast = v and true or false end })
     FishTab:Toggle({ Title = "Auto Minigames", Callback = function(v) FISH.autoMini = v and true or false end })
     FishTab:Toggle({ Title = "Bigger Success Bar", Callback = function(v) FISH.bigBar = v and true or false end })
@@ -612,6 +615,7 @@ end
 -- Tab: Bring (generic, will refine later)
 do
     local BringTab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({ Title = "Bring", Icon = "box" }) or nil
+    if not BringTab then return end
     BringTab:Input({ Title = "Info", Type = "Textarea", Locked = true, Desc = "Brings items by teleporting to them and interacting (client-side)." })
     local bringState = { category = "Guns", maxPer = 50, targetLoc = "Player" }
     if BringTab and type(BringTab.Dropdown) == "function" then
@@ -706,10 +710,11 @@ end
 
 -- Tab: Teleport
 do
-    local TPTab = ElementsSection:Tab({
+    local TPTab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({
         Title = "Teleport",
         Icon = "map-pin",
-    })
+    }) or nil
+    if not TPTab then return end
 
     -- Simpler and stable: Input for player name
     TPTab:Input({
