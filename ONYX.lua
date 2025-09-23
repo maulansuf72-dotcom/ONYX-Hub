@@ -124,6 +124,7 @@ end
 -- Tab: Visuals (FPS Boost & ESP reveals)
 do
     local VisTab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({ Title = "Visuals", Icon = "eye" }) or nil
+    if not VisTab then return end
     local Lighting = game:GetService("Lighting")
     local overlay
     VisTab:Toggle({ Title = "Full Bright", Callback=function(v) pcall(function() if v then Lighting.Brightness=3 Lighting.ExposureCompensation=0.6 else Lighting.Brightness=1 Lighting.ExposureCompensation=0 end end) end })
@@ -140,7 +141,7 @@ do
     -- ESP filters by category (best-effort by keyword)
     local espFilter = {enabled=false, keywords={}}
     VisTab:Toggle({ Title = "Reveal Locations", Desc = "Enable multiple ESPs", Callback=function(v) ESP.mobs=v ESP.items=v ESP.players=v end })
-    if VisTab and type(VisTab.Dropdown) == "function" then
+    if type(VisTab.Dropdown) == "function" then
         local curGear = PRESETS.gears[1]
         VisTab:Dropdown({ Title = "Select Gears & Fuels", List = (function() local t={} for _,x in ipairs(PRESETS.gears) do table.insert(t,x) end for _,x in ipairs(PRESETS.fuels) do table.insert(t,x) end return t end)(), Selected = curGear, Callback=function(v) curGear=v end })
         VisTab:Toggle({ Title = "Enable Gear and Fuel ESP", Callback=function(v)
@@ -177,7 +178,7 @@ end
 
 -- Tab: Players (movement & anti)
 do
-    local PTab = ElementsSection:Tab({ Title = "Players", Icon = "user" })
+    local PTab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({ Title = "Players", Icon = "user" }) or nil
     PTab:Toggle({ Title = "AntiAFK", Callback=function(v)
         PLAY.antiAFK = v and true or false
         if v then
@@ -194,7 +195,7 @@ do
     end })
 
     PTab:Toggle({ Title = "Fly", Callback=function(v) PLAY.fly = v and true or false end })
-    if type(PTab.Slider) == "function" then
+    if PTab and type(PTab.Slider) == "function" then
         PTab:Slider({ Title = "Fly Speed", Min=10, Max=300, Default=PLAY.flySpeed, Callback=function(val) PLAY.flySpeed = math.clamp(tonumber(val) or PLAY.flySpeed,10,300) end })
     end
     PTab:Toggle({ Title = "Infinite Jump", Callback=function(v) PLAY.infiniteJump = v and true or false end })
@@ -248,14 +249,14 @@ do
     end
 
     -- Section: Gears
-    if type(BringTab.Dropdown) == "function" then
+    if BringTab and type(BringTab.Dropdown) == "function" then
         local curGear = PRESETS.gears[1]
         BringTab:Dropdown({ Title = "Gears", List = PRESETS.gears, Selected = curGear, Callback = function(v) curGear = v end })
         BringTab:Button({ Title = "Bring Gears", Callback = function() runBringByList({curGear}) end })
     end
 
     -- Section: Fuel (generic bring to campfire via preset)
-    if type(BringTab.Dropdown) == "function" then
+    if BringTab and type(BringTab.Dropdown) == "function" then
         local curFuel = PRESETS.fuels[1]
         BringTab:Dropdown({ Title = "Fuel", List = PRESETS.fuels, Selected = curFuel, Callback = function(v) curFuel = v end })
         BringTab:Button({ Title = "Bring Fuel", Callback = function()
@@ -265,14 +266,14 @@ do
     end
 
     -- Section: Food & Healing
-    if type(BringTab.Dropdown) == "function" then
+    if BringTab and type(BringTab.Dropdown) == "function" then
         local curFood = PRESETS.foods[1]
         BringTab:Dropdown({ Title = "Food & Healing", List = PRESETS.foods, Selected = curFood, Callback = function(v) curFood = v end })
         BringTab:Button({ Title = "Bring Food & Healing", Callback = function() runBringByList({curFood}) end })
     end
 
     -- Section: Guns & Armor
-    if type(BringTab.Dropdown) == "function" then
+    if BringTab and type(BringTab.Dropdown) == "function" then
         local curWeap = PRESETS.weapons[1]
         BringTab:Dropdown({ Title = "Guns & Armor", List = PRESETS.weapons, Selected = curWeap, Callback = function(v) curWeap = v end })
         BringTab:Button({ Title = "Bring Guns & Armor", Callback = function() runBringByList({curWeap}) end })
@@ -610,10 +611,10 @@ end
 
 -- Tab: Bring (generic, will refine later)
 do
-    local BringTab = ElementsSection:Tab({ Title = "Bring", Icon = "box" })
+    local BringTab = ElementsSection and ElementsSection.Tab and ElementsSection:Tab({ Title = "Bring", Icon = "box" }) or nil
     BringTab:Input({ Title = "Info", Type = "Textarea", Locked = true, Desc = "Brings items by teleporting to them and interacting (client-side)." })
     local bringState = { category = "Guns", maxPer = 50, targetLoc = "Player" }
-    if type(BringTab.Dropdown) == "function" then
+    if BringTab and type(BringTab.Dropdown) == "function" then
         BringTab:Dropdown({ Title = "Bring Location", List = {"Player","Campfire"}, Selected = bringState.targetLoc, Callback = function(o) bringState.targetLoc = o end })
     end
     BringTab:Input({ Title = "Max Per Item", Desc = "e.g., 1000", Callback = function(t) local n=tonumber(t) if n then bringState.maxPer=n end end })
