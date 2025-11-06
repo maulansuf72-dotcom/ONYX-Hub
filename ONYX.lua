@@ -43,11 +43,20 @@ local function isPlayerCharacter(model)
    return Players:GetPlayerFromCharacter(model) ~= nil
 end
 
+local function nameChainHasBanana(inst)
+   local cur = inst
+   while cur do
+      local n = tostring(cur.Name):lower()
+      if n:find("banana") then return true end
+      cur = cur.Parent
+   end
+   return false
+end
+
 local function isBananaOrNPC(model)
    if not model or not model:IsA("Model") then return false end
    if isPlayerCharacter(model) then return false end
-   local nameLower = string.lower(model.Name)
-   if string.find(nameLower, "banana") then return true end
+   if nameChainHasBanana(model) then return true end
    local hum = model:FindFirstChildWhichIsA("Humanoid")
    return hum ~= nil
 end
@@ -62,15 +71,20 @@ local function markNPC(model)
    if not espEnabled then return end
    if not isBananaOrNPC(model) then return end
    if npcHighlights[model] and npcHighlights[model].Parent then return end
-   local hl = Instance.new("Highlight")
-   hl.FillTransparency = 0.5
-   hl.OutlineTransparency = 0
-   local isBanana = string.find(string.lower(model.Name), "banana") ~= nil
-   hl.FillColor = isBanana and Color3.fromRGB(255, 226, 50) or Color3.fromRGB(85, 170, 255)
-   hl.OutlineColor = Color3.fromRGB(0, 0, 0)
-   hl.Adornee = model
-   hl.Parent = model
-   npcHighlights[model] = hl
+   local ok, err = pcall(function()
+      local hl = Instance.new("Highlight")
+      hl.FillTransparency = 0.5
+      hl.OutlineTransparency = 0
+      local isBanana = nameChainHasBanana(model)
+      hl.FillColor = isBanana and Color3.fromRGB(255, 226, 50) or Color3.fromRGB(85, 170, 255)
+      hl.OutlineColor = Color3.fromRGB(0, 0, 0)
+      hl.Adornee = model
+      hl.Parent = model
+      npcHighlights[model] = hl
+   end)
+   if not ok then
+      warn("ESP markNPC error:", err)
+   end
 end
 
 local function removeESP(player)
@@ -136,13 +150,16 @@ local function enableESP()
          attachESP(player)
       end
    end
-   scanWorldForNPCs()
+   task.spawn(function()
+      task.wait(2)
+      if espEnabled then scanWorldForNPCs() end
+   end)
    if not worldConns.descAdded then
       worldConns.descAdded = workspace.DescendantAdded:Connect(function(inst)
          if not espEnabled then return end
          if inst:IsA("Model") then
             markNPC(inst)
-         elseif inst.Parent and inst.Parent:IsA and inst.Parent:IsA("Model") then
+         elseif inst.Parent and inst.Parent:IsA("Model") then
             -- if parts appear under model after spawn
             markNPC(inst.Parent)
          end
