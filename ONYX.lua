@@ -52,6 +52,12 @@ local function isBananaOrNPC(model)
    return hum ~= nil
 end
 
+local espEnabled = false
+local espHighlights = {}
+local espConns = {}
+local npcHighlights = {}
+local worldConns = {}
+
 local function markNPC(model)
    if not espEnabled then return end
    if not isBananaOrNPC(model) then return end
@@ -67,6 +73,54 @@ local function markNPC(model)
    npcHighlights[model] = hl
 end
 
+local function removeESP(player)
+   if espHighlights[player] then
+      espHighlights[player]:Destroy()
+      espHighlights[player] = nil
+   end
+   local t = espConns[player]
+   if t then
+      if t.charAdded then t.charAdded:Disconnect() end
+      if t.died then t.died:Disconnect() end
+      espConns[player] = nil
+   end
+end
+
+local function applyESPToChar(player, char)
+   if not char then return end
+   removeESP(player)
+   local hl = Instance.new("Highlight")
+   hl.FillTransparency = 0.5
+   hl.OutlineTransparency = 0
+   hl.FillColor = Color3.fromRGB(255, 85, 85)
+   hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+   hl.Adornee = char
+   hl.Parent = char
+   espHighlights[player] = hl
+   local hum = char:FindFirstChildWhichIsA("Humanoid")
+   if hum then
+      local diedConn = hum.Died:Connect(function()
+         removeESP(player)
+      end)
+      espConns[player] = espConns[player] or {}
+      espConns[player].died = diedConn
+   end
+end
+
+local function attachESP(player)
+   if player == LocalPlayer then return end
+   if not espEnabled then return end
+   local char = player.Character or player.CharacterAdded:Wait()
+   applyESPToChar(player, char)
+   local ca = player.CharacterAdded:Connect(function(c)
+      if espEnabled then
+         applyESPToChar(player, c)
+      end
+   end)
+   espConns[player] = espConns[player] or {}
+   espConns[player].charAdded = ca
+end
+
 local function scanWorldForNPCs()
    for _, inst in ipairs(workspace:GetDescendants()) do
       if inst:IsA("Model") then
@@ -75,24 +129,30 @@ local function scanWorldForNPCs()
    end
 end
 
--- Extend enableESP to include world scanning
-do
-   local _enableESP_ref = enableESP
-   function enableESP()
-      _enableESP_ref()
-      scanWorldForNPCs()
-      if not worldConns.descAdded then
-         worldConns.descAdded = workspace.DescendantAdded:Connect(function(inst)
-            if not espEnabled then return end
-            if inst:IsA("Model") then
-               markNPC(inst)
-            elseif inst.Parent and inst.Parent:IsA and inst.Parent:IsA("Model") then
-               -- if parts appear under model after spawn
-               markNPC(inst.Parent)
-            end
-         end)
+local function enableESP()
+   espEnabled = true
+   for _, player in ipairs(Players:GetPlayers()) do
+      if player ~= LocalPlayer then
+         attachESP(player)
       end
    end
+   scanWorldForNPCs()
+   if not worldConns.descAdded then
+      worldConns.descAdded = workspace.DescendantAdded:Connect(function(inst)
+         if not espEnabled then return end
+         if inst:IsA("Model") then
+            markNPC(inst)
+         elseif inst.Parent and inst.Parent:IsA and inst.Parent:IsA("Model") then
+            -- if parts appear under model after spawn
+            markNPC(inst.Parent)
+         end
+      end)
+   end
+   Players.PlayerAdded:Connect(function(player)
+      if espEnabled then
+         attachESP(player)
+      end
+   end)
 end
 
 local Tab = Window:CreateTab("Main", 4483362458)
@@ -242,86 +302,6 @@ local ToggleNoFog = Tab:CreateToggle({
 })
 
 local VisualsSection = Tab:CreateSection("Visuals")
-
-local espEnabled = false
-local espHighlights = {}
-local espConns = {}
-local npcHighlights = {}
-local worldConns = {}
-
-local function removeESP(player)
-   if espHighlights[player] then
-      espHighlights[player]:Destroy()
-      espHighlights[player] = nil
-   end
-   local t = espConns[player]
-   if t then
-      if t.charAdded then t.charAdded:Disconnect() end
-      if t.died then t.died:Disconnect() end
-      espConns[player] = nil
-   end
-end
-
-local function applyESPToChar(player, char)
-   if not char then return end
-   removeESP(player)
-   local hl = Instance.new("Highlight")
-   hl.FillTransparency = 0.5
-   hl.OutlineTransparency = 0
-   hl.FillColor = Color3.fromRGB(255, 85, 85)
-   hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-   hl.Adornee = char
-   hl.Parent = char
-   espHighlights[player] = hl
-   local hum = char:FindFirstChildWhichIsA("Humanoid")
-   if hum then
-      local diedConn = hum.Died:Connect(function()
-         removeESP(player)
-      end)
-      espConns[player] = espConns[player] or {}
-      espConns[player].died = diedConn
-   end
-end
-
-local function attachESP(player)
-   if player == LocalPlayer then return end
-   if not espEnabled then return end
-   local char = player.Character or player.CharacterAdded:Wait()
-   applyESPToChar(player, char)
-   local ca = player.CharacterAdded:Connect(function(c)
-      if espEnabled then
-         applyESPToChar(player, c)
-      end
-   end)
-   espConns[player] = espConns[player] or {}
-   espConns[player].charAdded = ca
-end
-
-local function enableESP()
-   espEnabled = true
-   for _, plr in ipairs(Players:GetPlayers()) do
-      attachESP(plr)
-   end
-   if not espConns._playerAdded then
-      espConns._playerAdded = Players.PlayerAdded:Connect(function(plr)
-         attachESP(plr)
-      end)
-   end
-end
-
-local function disableESP()
-   espEnabled = false
-   for plr, _ in pairs(espHighlights) do
-      removeESP(plr)
-   end
-   if espConns._playerAdded then espConns._playerAdded:Disconnect() espConns._playerAdded = nil end
-   for mdl, hl in pairs(npcHighlights) do
-      if hl then hl:Destroy() end
-      npcHighlights[mdl] = nil
-   end
-   if worldConns.descAdded then worldConns.descAdded:Disconnect() worldConns.descAdded = nil end
-end
-
 local ToggleESP = Tab:CreateToggle({
    Name = "ESP",
    CurrentValue = false,
