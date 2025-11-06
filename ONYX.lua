@@ -47,7 +47,11 @@ local function isBananaOrNPC(model)
    if not model or not model:IsA("Model") then return false end
    if isPlayerCharacter(model) then return false end
    local hum = model:FindFirstChildWhichIsA("Humanoid")
-   return hum ~= nil
+   if hum then return true end
+   local ac = model:FindFirstChildWhichIsA("AnimationController")
+   if ac then return true end
+   if model:FindFirstChild("HumanoidRootPart") then return true end
+   return false
 end
 
 local espEnabled = false
@@ -66,6 +70,7 @@ local function markNPC(model)
       hl.OutlineTransparency = 0
       hl.FillColor = Color3.fromRGB(85, 170, 255)
       hl.OutlineColor = Color3.fromRGB(0, 0, 0)
+      hl.Name = "ONYX_ESP"
       hl.Adornee = model
       hl.Parent = model
       npcHighlights[model] = hl
@@ -96,6 +101,7 @@ local function applyESPToChar(player, char)
    hl.OutlineTransparency = 0
    hl.FillColor = Color3.fromRGB(255, 85, 85)
    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+   hl.Name = "ONYX_ESP"
    hl.Adornee = char
    hl.Parent = char
    espHighlights[player] = hl
@@ -152,7 +158,7 @@ local function enableESP()
          end
       end)
    end
-   Players.PlayerAdded:Connect(function(player)
+   worldConns.playerAdded = Players.PlayerAdded:Connect(function(player)
       if espEnabled then
          attachESP(player)
       end
