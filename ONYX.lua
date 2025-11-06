@@ -37,6 +37,64 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
+-- NPC/Banana ESP
+local function isPlayerCharacter(model)
+   if not model or not model:IsA("Model") then return false end
+   return Players:GetPlayerFromCharacter(model) ~= nil
+end
+
+local function isBananaOrNPC(model)
+   if not model or not model:IsA("Model") then return false end
+   if isPlayerCharacter(model) then return false end
+   local nameLower = string.lower(model.Name)
+   if string.find(nameLower, "banana") then return true end
+   local hum = model:FindFirstChildWhichIsA("Humanoid")
+   return hum ~= nil
+end
+
+local function markNPC(model)
+   if not espEnabled then return end
+   if not isBananaOrNPC(model) then return end
+   if npcHighlights[model] and npcHighlights[model].Parent then return end
+   local hl = Instance.new("Highlight")
+   hl.FillTransparency = 0.5
+   hl.OutlineTransparency = 0
+   local isBanana = string.find(string.lower(model.Name), "banana") ~= nil
+   hl.FillColor = isBanana and Color3.fromRGB(255, 226, 50) or Color3.fromRGB(85, 170, 255)
+   hl.OutlineColor = Color3.fromRGB(0, 0, 0)
+   hl.Adornee = model
+   hl.Parent = model
+   npcHighlights[model] = hl
+end
+
+local function scanWorldForNPCs()
+   for _, inst in ipairs(workspace:GetDescendants()) do
+      if inst:IsA("Model") then
+         markNPC(inst)
+      end
+   end
+end
+
+-- Extend enableESP to include world scanning
+do
+   local _enableESP_ref = enableESP
+   function enableESP()
+      _enableESP_ref()
+      scanWorldForNPCs()
+      if not worldConns.descAdded then
+         worldConns.descAdded = workspace.DescendantAdded:Connect(function(inst)
+            if not espEnabled then return end
+            if inst:IsA("Model") then
+               markNPC(inst)
+            elseif inst.Parent and inst.Parent:IsA and inst.Parent:IsA("Model") then
+               -- if parts appear under model after spawn
+               markNPC(inst.Parent)
+            end
+         end)
+      end
+   end
+end
+
 local Tab = Window:CreateTab("Main", 4483362458)
 local Section = Tab:CreateSection("Toggles")
 
@@ -188,6 +246,8 @@ local VisualsSection = Tab:CreateSection("Visuals")
 local espEnabled = false
 local espHighlights = {}
 local espConns = {}
+local npcHighlights = {}
+local worldConns = {}
 
 local function removeESP(player)
    if espHighlights[player] then
@@ -255,6 +315,11 @@ local function disableESP()
       removeESP(plr)
    end
    if espConns._playerAdded then espConns._playerAdded:Disconnect() espConns._playerAdded = nil end
+   for mdl, hl in pairs(npcHighlights) do
+      if hl then hl:Destroy() end
+      npcHighlights[mdl] = nil
+   end
+   if worldConns.descAdded then worldConns.descAdded:Disconnect() worldConns.descAdded = nil end
 end
 
 local ToggleESP = Tab:CreateToggle({
