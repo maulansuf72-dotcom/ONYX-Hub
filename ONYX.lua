@@ -43,20 +43,9 @@ local function isPlayerCharacter(model)
    return Players:GetPlayerFromCharacter(model) ~= nil
 end
 
-local function nameChainHasBanana(inst)
-   local cur = inst
-   while cur do
-      local n = tostring(cur.Name):lower()
-      if n:find("banana") then return true end
-      cur = cur.Parent
-   end
-   return false
-end
-
 local function isBananaOrNPC(model)
    if not model or not model:IsA("Model") then return false end
    if isPlayerCharacter(model) then return false end
-   if nameChainHasBanana(model) then return true end
    local hum = model:FindFirstChildWhichIsA("Humanoid")
    return hum ~= nil
 end
@@ -75,8 +64,7 @@ local function markNPC(model)
       local hl = Instance.new("Highlight")
       hl.FillTransparency = 0.5
       hl.OutlineTransparency = 0
-      local isBanana = nameChainHasBanana(model)
-      hl.FillColor = isBanana and Color3.fromRGB(255, 226, 50) or Color3.fromRGB(85, 170, 255)
+      hl.FillColor = Color3.fromRGB(85, 170, 255)
       hl.OutlineColor = Color3.fromRGB(0, 0, 0)
       hl.Adornee = model
       hl.Parent = model
@@ -151,7 +139,7 @@ local function enableESP()
       end
    end
    task.spawn(function()
-      task.wait(2)
+      task.wait(1)
       if espEnabled then scanWorldForNPCs() end
    end)
    if not worldConns.descAdded then
@@ -159,8 +147,7 @@ local function enableESP()
          if not espEnabled then return end
          if inst:IsA("Model") then
             markNPC(inst)
-         elseif inst.Parent and inst.Parent:IsA("Model") then
-            -- if parts appear under model after spawn
+         elseif inst:IsA("Humanoid") and inst.Parent and inst.Parent:IsA("Model") then
             markNPC(inst.Parent)
          end
       end)
